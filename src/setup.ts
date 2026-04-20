@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Interactive setup — connects to OBS, fetches scenes + sources, writes config.
+ * One-time setup — only asks for OBS WebSocket credentials.
+ * Everything else (scenes, sources, filters, transitions...) is auto-discovered
+ * at plugin startup by connecting to OBS directly.
+ *
  * Run: npm run setup
  */
 import OBSWebSocket from 'obs-websocket-js';
@@ -18,137 +21,89 @@ const ask = (q: string, fallback = ''): Promise<string> =>
     rl.question(`${q}${hint}: `, (ans) => res(ans.trim() || fallback));
   });
 
-function notify(msg: string) {
-  console.log(`\n${msg}`);
-}
-
 async function main() {
   console.log('\n🎬  OBS Controller — Setup\n');
+  console.log('Scenes, sources, filters, and transitions are auto-discovered from OBS.');
+  console.log('This setup only needs your WebSocket credentials.\n');
 
-  // Load existing config as defaults
   let existing: Record<string, unknown> = {};
   if (existsSync(CONFIG_PATH)) {
     try { existing = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
   }
 
-  const host = await ask('OBS WebSocket host', (existing.host as string) ?? 'localhost');
-  const portStr = await ask('OBS WebSocket port', String((existing.port as number) ?? 4455));
-  const password = await ask('OBS WebSocket password (leave blank if none)', (existing.password as string) ?? '');
+  const host     = await ask('OBS WebSocket host', (existing.host as string) ?? 'localhost');
+  const portStr  = await ask('OBS WebSocket port', String((existing.port as number) ?? 4455));
+  const password = await ask('Password (leave blank if none)', (existing.password as string) ?? '');
 
-  notify('Connecting to OBS...');
-
+  // Verify connection
+  console.log('\nVerifying connection...');
   const obs = new OBSWebSocket();
   try {
     await obs.connect(`ws://${host}:${portStr}`, password || undefined);
+    console.log('✅  Connected to OBS!\n');
+
+    // Show what will be auto-discovered
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const call = (req: string, data?: Record<string, unknown>) => (obs as any).call(req, data);
+
+    const sceneData = await call('GetSceneList') as { scenes: Array<{ sceneName: string }> };
+    const inputData = await call('GetInputList') as { inputs: Array<{ inputName: string }> };
+    const transData = await call('GetSceneTransitionList') as { transitions: Array<{ transitionName: string }> };
+    const colData   = await call('GetSceneCollectionList') as { sceneCollections: string[] };
+    const profData  = await call('GetProfileList') as { profiles: string[] };
+
+    console.log('📋  Will auto-discover:');
+    console.log(`   ${sceneData.scenes.length} scenes`);
+    console.log(`   ${inputData.inputs.length} sources/inputs`);
+    console.log(`   ${transData.transitions.length} transitions`);
+    console.log(`   ${colData.sceneCollections.length} scene collections`);
+    console.log(`   ${profData.profiles.length} profiles`);
+    console.log('   All filters on every source');
+    console.log('   Audio inputs & outputs\n');
+
+    await obs.disconnect();
   } catch (e) {
-    console.error(`\n❌  Could not connect: ${(e as Error).message}`);
-    console.error('   Make sure OBS is open and WebSocket server is enabled (Tools → WebSocket Server Settings).');
-    rl.close();
-    process.exit(1);
+    console.warn(`\n⚠️  Could not connect: ${(e as Error).message}`);
+    console.warn('   Config will be saved anyway. Make sure OBS is open before using the plugin.\n');
   }
 
-  notify('✅  Connected!\n');
+  // Optional: source overrides
+  const overrideMic     = await ask('Override mic source name? (leave blank to auto-detect)', '');
+  const overrideDesktop = await ask('Override desktop audio source name? (leave blank to auto-detect)', '');
 
-  // Fetch scenes
-  const sceneData = (await obs.call('GetSceneList')) as unknown as {
-    scenes: Array<{ sceneName: string }>;
-  };
-  const allScenes = sceneData.scenes.map((s) => s.sceneName).reverse(); // OBS returns newest-first
-
-  console.log('📺  Scenes found:');
-  allScenes.forEach((s, i) => console.log(`   ${i + 1}. ${s}`));
-
-  const sceneInput = await ask(
-    '\nWhich scenes to add as actions? Enter numbers separated by commas, or "all"',
-    'all'
-  );
-  const selectedScenes =
-    sceneInput.toLowerCase() === 'all'
-      ? allScenes
-      : sceneInput
-          .split(',')
-          .map((n) => allScenes[parseInt(n.trim()) - 1])
-          .filter(Boolean);
-
-  // Fetch audio sources
-  const inputData = (await obs.call('GetInputList')) as {
-    inputs: Array<{ inputName: string; inputKind: string }>;
-  };
-  const audioSources = inputData.inputs.filter((i) =>
-    ['wasapi_input_capture', 'wasapi_output_capture', 'coreaudio_input_capture',
-     'coreaudio_output_capture', 'pulse_input_capture', 'pulse_output_capture',
-     'alsa_input_capture', 'ffmpeg_source'].includes(i.inputKind)
-  );
-
-  // Also include any source with "mic" or "audio" or "desktop" in name
-  const allAudioLike = inputData.inputs.filter(
-    (i) => /mic|audio|desktop|speaker|input|output/i.test(i.inputName)
-  );
-  const combinedAudio = [...new Map([...audioSources, ...allAudioLike].map((i) => [i.inputName, i])).values()];
-
-  let micSource = (existing.micSource as string) ?? 'Mic/Aux';
-  let desktopSource = (existing.desktopSource as string) ?? 'Desktop Audio';
-
-  if (combinedAudio.length > 0) {
-    console.log('\n🎙️  Audio sources found:');
-    combinedAudio.forEach((s, i) => console.log(`   ${i + 1}. ${s.inputName}`));
-
-    const micIndex = await ask('Which is your microphone? Enter number', '');
-    if (micIndex) micSource = combinedAudio[parseInt(micIndex) - 1]?.inputName ?? micSource;
-
-    const desktopIndex = await ask('Which is your desktop audio? Enter number', '');
-    if (desktopIndex) desktopSource = combinedAudio[parseInt(desktopIndex) - 1]?.inputName ?? desktopSource;
+  // Optional: text source presets
+  const textSources: Array<{ sourceName: string; presets: string[] }> = [];
+  const existingText = (existing.textSources as typeof textSources) ?? [];
+  if (existingText.length > 0) {
+    console.log(`\nExisting text source presets: ${existingText.map((t) => t.sourceName).join(', ')}`);
+    const keep = await ask('Keep existing text source presets? (y/n)', 'y');
+    if (keep.toLowerCase() === 'y') textSources.push(...existingText);
   }
 
-  // Fetch all sources for visibility actions
-  console.log('\n🎞️  Fetching sources for visibility actions...');
-  const currentScene = (await obs.call('GetCurrentProgramScene')) as { currentProgramSceneName: string };
-  const itemData = (await obs.call('GetSceneItemList', { sceneName: currentScene.currentProgramSceneName })) as {
-    sceneItems: Array<{ sourceName: string; sceneItemId: number }>;
-  };
-  const allSources = itemData.sceneItems.map((i) => i.sourceName);
-
-  let selectedSources: string[] = [];
-  if (allSources.length > 0) {
-    console.log(`   Sources in "${currentScene.currentProgramSceneName}":`);
-    allSources.forEach((s, i) => console.log(`   ${i + 1}. ${s}`));
-
-    const sourceInput = await ask(
-      'Which sources to add show/hide/toggle actions? Enter numbers, "all", or leave blank to skip',
-      ''
-    );
-    if (sourceInput.toLowerCase() === 'all') {
-      selectedSources = allSources;
-    } else if (sourceInput) {
-      selectedSources = sourceInput
-        .split(',')
-        .map((n) => allSources[parseInt(n.trim()) - 1])
-        .filter(Boolean);
+  const addText = await ask('\nAdd text source presets? (y/n)', 'n');
+  if (addText.toLowerCase() === 'y') {
+    let adding = true;
+    while (adding) {
+      const srcName = await ask('  Text source name in OBS (or blank to stop)', '');
+      if (!srcName) { adding = false; break; }
+      const presetsRaw = await ask(`  Presets for "${srcName}" (comma-separated)`, 'BRB, Live, Offline');
+      const presets = presetsRaw.split(',').map((p) => p.trim()).filter(Boolean);
+      textSources.push({ sourceName: srcName, presets });
     }
   }
-
-  await obs.disconnect();
 
   const config = {
     host,
     port: parseInt(portStr),
     password,
-    scenes: selectedScenes,
-    sources: selectedSources,
-    micSource,
-    desktopSource,
+    micSource: overrideMic,
+    desktopSource: overrideDesktop,
+    textSources,
   };
 
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-
   console.log(`\n✅  Config saved to ${CONFIG_PATH}`);
-  console.log('\n📋  Summary:');
-  console.log(`   Scenes:  ${selectedScenes.join(', ') || 'none'}`);
-  console.log(`   Sources: ${selectedSources.join(', ') || 'none'}`);
-  console.log(`   Mic:     ${micSource}`);
-  console.log(`   Desktop: ${desktopSource}`);
   console.log('\n▶️   Now run: npm run build && npm run link\n');
-
   rl.close();
 }
 
