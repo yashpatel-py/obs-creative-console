@@ -4,10 +4,18 @@ version: 1.0.0
 displayName: OBS Controller
 description: Full OBS Studio control for the MX Creative Console. Auto-discovers your scenes, sources, filters, and transitions. Drag any action onto any key or dial — no manual configuration needed.
 author: Yash Patel
+copyright: Copyright © 2025 Yash Patel. MIT License.
+homePageUrl: https://github.com/yashpatel-py/obs-creative-console
+supportPageUrl: https://github.com/yashpatel-py/obs-creative-console/issues
+license: MIT
 minimumLoupedeckVersion: 6.1
 
 pluginType: remote
 pluginRuntime: nodejs
 entryPoint: index.mjs
+
+supportedDevices:
+    - LoupedeckCtFamily
+    - LoupedeckPlusFamily
 
 pluginCapabilities:
