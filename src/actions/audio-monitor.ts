@@ -12,7 +12,6 @@ const MONITOR_STATES = [
   'OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT',
 ] as const;
 
-const MONITOR_LABELS = ['Off', 'Monitor Only', 'Monitor & Output'];
 
 export function makeAudioMonitorAction(sourceName: string) {
   const id = slug(sourceName);
@@ -37,7 +36,6 @@ export function makeAudioMonitorAction(sourceName: string) {
         monitorType: MONITOR_STATES[nextIndex],
       });
 
-      console.log(`[OBS] ${sourceName} monitor → ${MONITOR_LABELS[nextIndex]}`);
     }
   };
 }

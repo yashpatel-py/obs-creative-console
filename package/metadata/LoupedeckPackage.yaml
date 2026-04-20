@@ -1,8 +1,9 @@
 type: plugin4
 name: OBSController
-version: 0.1.0
+version: 1.0.0
 displayName: OBS Controller
-description: Control OBS Studio from your Creative Console — scenes, recording, streaming, audio, and more. Drag any action onto any key or dial.
+description: Full OBS Studio control for the MX Creative Console. Auto-discovers your scenes, sources, filters, and transitions. Drag any action onto any key or dial — no manual configuration needed.
+author: Yash Patel
 minimumLoupedeckVersion: 6.1
 
 pluginType: remote

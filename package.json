@@ -1,7 +1,7 @@
 {
   "name": "obs-controller",
-  "version": "0.1.0",
-  "description": "A plugin created with the Logi Plugin SDK",
+  "version": "1.0.0",
+  "description": "Full OBS Studio control for the Logitech MX Creative Console — scenes, recording, streaming, audio, filters, and more.",
   "type": "module",
   "main": "./dist/index.mjs",
   "scripts": {
@@ -16,8 +16,8 @@
     "watch": "npm run typecheck && tsup --watch",
     "setup": "tsx src/setup.ts"
   },
-  "author": "Your Name",
-  "license": "UNLICENSED",
+  "author": "Yash Patel",
+  "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
   },
