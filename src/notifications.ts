@@ -9,37 +9,37 @@ function notify(title: string, message: string) {
 export function setupNotifications(obs: any) {
   obs.on('RecordStateChanged', (data: unknown) => {
     const { outputState } = data as { outputState: string };
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') notify('OBS Controller', '🔴 Recording started');
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') notify('OBS Controller', '⏹ Recording stopped');
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_PAUSED')  notify('OBS Controller', '⏸ Recording paused');
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_RESUMED') notify('OBS Controller', '▶️ Recording resumed');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') notify('Studio Controller', '🔴 Recording started');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') notify('Studio Controller', '⏹ Recording stopped');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_PAUSED')  notify('Studio Controller', '⏸ Recording paused');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_RESUMED') notify('Studio Controller', '▶️ Recording resumed');
   });
 
   obs.on('StreamStateChanged', (data: unknown) => {
     const { outputState } = data as { outputState: string };
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') notify('OBS Controller', '🟢 Stream started — you are live!');
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') notify('OBS Controller', '🔴 Stream stopped');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') notify('Studio Controller', '🟢 Stream started — you are live!');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') notify('Studio Controller', '🔴 Stream stopped');
   });
 
   obs.on('ReplayBufferStateChanged', (data: unknown) => {
     const { outputState } = data as { outputState: string };
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') notify('OBS Controller', '🔁 Replay buffer active');
-    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') notify('OBS Controller', '⏹ Replay buffer stopped');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') notify('Studio Controller', '🔁 Replay buffer active');
+    if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') notify('Studio Controller', '⏹ Replay buffer stopped');
   });
 
   obs.on('ReplayBufferSaved', (data: unknown) => {
     const { savedReplayPath } = data as { savedReplayPath: string };
     const file = savedReplayPath.split('/').pop() ?? 'clip';
-    notify('OBS Controller', `💾 Replay saved: ${file}`);
+    notify('Studio Controller', `💾 Replay saved: ${file}`);
   });
 
   obs.on('SceneChanged', (data: unknown) => {
     const { sceneName } = data as { sceneName: string };
-    notify('OBS Controller', `🎬 Scene: ${sceneName}`);
+    notify('Studio Controller', `🎬 Scene: ${sceneName}`);
   });
 
   obs.on('VirtualcamStateChanged', (data: unknown) => {
     const { outputActive } = data as { outputActive: boolean };
-    notify('OBS Controller', outputActive ? '📷 Virtual camera ON' : '📷 Virtual camera OFF');
+    notify('Studio Controller', outputActive ? '📷 Virtual camera ON' : '📷 Virtual camera OFF');
   });
 }
