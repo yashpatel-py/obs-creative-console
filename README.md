@@ -1,6 +1,6 @@
-# OBS Controller — Logitech MX Creative Console Plugin
+# Studio Controller — Logitech MX Creative Console Plugin
 
-Full OBS Studio control for the [Logitech MX Creative Console](https://www.logitech.com/en-us/products/keyboards/mx-creative-console.html). Auto-discovers your scenes, sources, filters, and transitions — drag any action onto any key or dial with zero manual configuration.
+Control [OBS Studio](https://obsproject.com) from the [Logitech MX Creative Console](https://www.logitech.com/en-us/products/keyboards/mx-creative-console.html). Auto-discovers your scenes, sources, filters, and transitions — drag any action onto any key or dial with zero manual configuration.
 
 ## Features
 
@@ -53,7 +53,7 @@ npm run build
 npm run link
 ```
 
-Open Logi Options+ — the plugin appears under **OBS Controller**. Drag any action onto your keys or dial.
+Open Logi Options+ — the plugin appears under **Studio Controller**. Drag any action onto your keys or dial.
 
 ## Configuration
 
@@ -98,3 +98,5 @@ Submit the generated `.lplug4` file at [marketplace.logitech.com/contribute](htt
 ## License
 
 MIT © Yash Patel
+
+Studio Controller is an unofficial, community-built plugin. It is not affiliated with, endorsed by, or sponsored by the OBS Project. OBS and OBS Studio are trademarks of their respective owners.

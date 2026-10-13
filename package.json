@@ -1,7 +1,7 @@
 {
-  "name": "obs-controller",
+  "name": "studio-controller",
   "version": "1.0.0",
-  "description": "Full OBS Studio control for the Logitech MX Creative Console — scenes, recording, streaming, audio, filters, and more.",
+  "description": "Control OBS Studio from the Logitech MX Creative Console — scenes, recording, streaming, audio, filters, and more.",
   "type": "module",
   "main": "./dist/index.mjs",
   "scripts": {

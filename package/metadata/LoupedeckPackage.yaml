@@ -1,8 +1,8 @@
 type: plugin4
-name: OBSController
+name: StudioController
 version: 1.0.0
-displayName: OBS Controller
-description: Full OBS Studio control for the MX Creative Console. Auto-discovers your scenes, sources, filters, and transitions. Drag any action onto any key or dial — no manual configuration needed.
+displayName: Studio Controller
+description: Control OBS Studio from your MX Creative Console. Auto-discovers your scenes, sources, filters, and transitions. Drag any action onto any key or dial — no manual configuration needed. Unofficial plugin, not affiliated with or endorsed by the OBS Project.
 author: Yash Patel
 copyright: Copyright © 2025 Yash Patel. MIT License.
 homePageUrl: https://github.com/yashpatel-py/obs-creative-console

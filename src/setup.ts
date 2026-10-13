@@ -22,7 +22,7 @@ const ask = (q: string, fallback = ''): Promise<string> =>
   });
 
 async function main() {
-  console.log('\n🎬  OBS Controller — Setup\n');
+  console.log('\n🎬  Studio Controller — Setup\n');
   console.log('Scenes, sources, filters, and transitions are auto-discovered from OBS.');
   console.log('This setup only needs your WebSocket credentials.\n');
 
