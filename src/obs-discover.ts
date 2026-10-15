@@ -5,22 +5,38 @@ export type DiscoveredData = {
   sources: string[];           // deduplicated across all scenes
   audioInputs: string[];       // all audio input sources
   audioOutputs: string[];      // all audio output sources
-  micSource: string;           // best-guess mic
-  desktopSource: string;       // best-guess desktop audio
+  micSource: string;           // best-guess mic ('' if OBS didn't return its input list)
+  desktopSource: string;       // best-guess desktop audio ('' if OBS didn't return its input list)
   filters: Array<{ sourceName: string; filterName: string }>;
   transitions: string[];
   sceneCollections: string[];
   profiles: string[];
 };
 
+// OBS's default names for the mic and desktop audio sources
+export const DEFAULT_MIC_SOURCE = 'Mic/Aux';
+export const DEFAULT_DESKTOP_SOURCE = 'Desktop Audio';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch { return fallback; }
 }
 
+// A request in flight when OBS drops or freezes never settles, so give each one a deadline
+const REQUEST_TIMEOUT_MS = 5_000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out`)), REQUEST_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function discoverOBS(obs: OBSWebSocket): Promise<DiscoveredData> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const call = (req: string, data?: Record<string, unknown>) => (obs as any).call(req, data);
+  const call = (req: string, data?: Record<string, unknown>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    withTimeout((obs as any).call(req, data) as Promise<unknown>, req);
 
   // ── Scenes ──────────────────────────────────────────────────────────────────
   const sceneData = await safe(
@@ -45,13 +61,12 @@ export async function discoverOBS(obs: OBSWebSocket): Promise<DiscoveredData> {
   const sources = [...sourceSet];
 
   // ── All inputs ───────────────────────────────────────────────────────────────
-  const inputData = await safe(
-    () => call('GetInputList') as Promise<{
-      inputs: Array<{ inputName: string; inputKind: string }>;
-    }>,
-    { inputs: [] }
+  type InputList = { inputs: Array<{ inputName: string; inputKind: string }> };
+  const inputData = await safe<InputList | null>(
+    () => call('GetInputList') as Promise<InputList>,
+    null
   );
-  const inputs = inputData.inputs;
+  const inputs = inputData?.inputs ?? [];
 
   const MIC_KINDS = [
     'coreaudio_input_capture',
@@ -73,16 +88,18 @@ export async function discoverOBS(obs: OBSWebSocket): Promise<DiscoveredData> {
     .filter((i) => DESKTOP_KINDS.includes(i.inputKind) || /desktop|speaker|output/i.test(i.inputName))
     .map((i) => i.inputName);
 
-  // Best-guess defaults
-  const micSource =
+  // Best-guess defaults — blank if the input list is unavailable, so callers can keep an earlier guess
+  const micSource = !inputData ? '' : (
     audioInputs[0] ??
     inputs.find((i) => /mic/i.test(i.inputName))?.inputName ??
-    'Mic/Aux';
+    DEFAULT_MIC_SOURCE
+  );
 
-  const desktopSource =
+  const desktopSource = !inputData ? '' : (
     audioOutputs[0] ??
     inputs.find((i) => /desktop|speaker/i.test(i.inputName))?.inputName ??
-    'Desktop Audio';
+    DEFAULT_DESKTOP_SOURCE
+  );
 
   // ── Filters for every source ─────────────────────────────────────────────────
   const filters: Array<{ sourceName: string; filterName: string }> = [];

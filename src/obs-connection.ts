@@ -1,7 +1,6 @@
 import OBSWebSocket from 'obs-websocket-js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+import { CONFIG_PATH, migrateLegacyConfig } from './config-path.js';
 import { setupNotifications } from './notifications.js';
 
 export type OBSConfig = {
@@ -14,8 +13,6 @@ export type OBSConfig = {
   micSource: string;
   desktopSource: string;
 };
-
-const CONFIG_PATH = join(homedir(), '.obs-controller-config.json');
 
 const DEFAULT_CONFIG: OBSConfig = {
   host: 'localhost',
@@ -30,6 +27,8 @@ class OBSConnection {
   readonly obs = new OBSWebSocket();
   private connected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectedHandlers: Array<() => void> = [];
+  private lastConfigError = '';
   config: OBSConfig;
 
   constructor() {
@@ -42,23 +41,48 @@ class OBSConnection {
   }
 
   loadConfig(): OBSConfig {
+    return this.readConfig() ?? { ...DEFAULT_CONFIG };
+  }
+
+  // Returns null if the config file can't be parsed (e.g. mid-edit)
+  private readConfig(): OBSConfig | null {
+    migrateLegacyConfig();
     if (!existsSync(CONFIG_PATH)) {
       writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
       return { ...DEFAULT_CONFIG };
     }
     try {
       const raw = readFileSync(CONFIG_PATH, 'utf-8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
-    } catch {
-      return { ...DEFAULT_CONFIG };
+      const config = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      this.lastConfigError = '';
+      return config;
+    } catch (e) {
+      // Warn once per distinct error — this runs on every reconnect attempt. Don't log the
+      // JSON parser's message: it can quote part of the password.
+      const reason = e instanceof SyntaxError ? 'not valid JSON' : (e as Error).message;
+      if (reason !== this.lastConfigError) {
+        console.warn(`[OBS] Could not read ${CONFIG_PATH} (${reason}) — ignoring it until it's fixed`);
+        this.lastConfigError = reason;
+      }
+      return null;
     }
   }
 
   async connect(): Promise<void> {
     if (this.connected) return;
+    // Re-read credentials so edits to the config file apply without restarting the plugin;
+    // keep the current ones if the file can't be parsed
+    const fresh = this.readConfig();
+    if (fresh) Object.assign(this.config, { host: fresh.host, port: fresh.port, password: fresh.password });
     const url = `ws://${this.config.host}:${this.config.port}`;
     await this.obs.connect(url, this.config.password || undefined);
     this.connected = true;
+    for (const handler of this.connectedHandlers) handler();
+  }
+
+  // Called after every successful connection made from now on
+  onConnected(handler: () => void): void {
+    this.connectedHandlers.push(handler);
   }
 
   connectWithRetry(): void {

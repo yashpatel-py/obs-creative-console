@@ -2,12 +2,13 @@ type: plugin4
 name: StudioController
 version: 1.0.0
 displayName: Studio Controller
-description: Control OBS Studio from your MX Creative Console. Auto-discovers your scenes, sources, filters, and transitions. Drag any action onto any key or dial — no manual configuration needed. Unofficial plugin, not affiliated with or endorsed by the OBS Project.
+description: Control OBS Studio from your MX Creative Console. Auto-discovers your scenes, sources, filters, and transitions. Drag any action onto any key or dial — no per-action setup needed. Unofficial plugin, not affiliated with or endorsed by the OBS Project.
 author: Yash Patel
-copyright: Copyright © 2025 Yash Patel. MIT License.
+copyright: Copyright © 2026 Yash Patel. MIT License.
 homePageUrl: https://github.com/yashpatel-py/obs-creative-console
 supportPageUrl: https://github.com/yashpatel-py/obs-creative-console/issues
 license: MIT
+licenseUrl: https://opensource.org/licenses/MIT
 minimumLoupedeckVersion: 6.1
 
 pluginType: remote
@@ -15,7 +16,9 @@ pluginRuntime: nodejs
 entryPoint: index.mjs
 
 supportedDevices:
+    # Logitech MX Creative Console
+    - LoupedeckExtendedFamily
+    # Loupedeck CT, Live and Live S
     - LoupedeckCtFamily
-    - LoupedeckPlusFamily
 
 pluginCapabilities:

@@ -2,10 +2,9 @@
  * Prebuild step — reads config and generates icons for all dynamic actions.
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { homedir } from 'os';
 import { join, resolve } from 'path';
+import { CONFIG_PATH, migrateLegacyConfig } from './config-path.js';
 
-const CONFIG_PATH = join(homedir(), '.obs-controller-config.json');
 const ICONS_DIR = resolve('package/actionicons');
 const SYMBOLS_DIR = resolve('package/actionsymbols');
 
@@ -33,6 +32,7 @@ function cloneIcon(actionName: string, template: string) {
   writeFileSync(join(SYMBOLS_DIR, `${actionName}.svg`), content);
 }
 
+migrateLegacyConfig();
 let config: Config = {};
 if (existsSync(CONFIG_PATH)) {
   try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }
