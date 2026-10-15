@@ -1,6 +1,6 @@
-import { PluginSDK } from '@logitech/plugin-sdk';
+import { PluginSDK, type Action } from '@logitech/plugin-sdk';
 import { obsConnection } from './src/obs-connection.js';
-import { discoverOBS } from './src/obs-discover.js';
+import { discoverOBS, DEFAULT_MIC_SOURCE, DEFAULT_DESKTOP_SOURCE } from './src/obs-discover.js';
 
 // Static actions (always available)
 import { ToggleRecordAction } from './src/actions/record-toggle.js';
@@ -61,8 +61,84 @@ pluginSDK.registerAction(new TransitionDurationAction());
 pluginSDK.registerAction(new OpenProgramProjectorAction());
 pluginSDK.registerAction(new OpenPreviewProjectorAction());
 
-// ── Connect to OBS and discover everything ────────────────────────────────────
+// ── Discover everything in OBS and register an action for each item ──────────
 const cfg = obsConnection.config;
+// Manual source overrides from the config file — blank means auto-detect on every discovery
+const { micSource: micOverride, desktopSource: desktopOverride } = cfg;
+const registered = new Set<string>();
+
+function registerOnce(action: Action) {
+  if (registered.has(action.name)) return;
+  registered.add(action.name);
+  pluginSDK.registerAction(action);
+}
+
+async function discoverAndRegister() {
+  const obs = await discoverOBS(obsConnection.obs);
+
+  // Patch mic/desktop source into the actions that reference config, preferring manual overrides
+  // and keeping the previous guess if OBS didn't return its input list this time
+  const config = obsConnection.config;
+  config.micSource = micOverride || obs.micSource || config.micSource || DEFAULT_MIC_SOURCE;
+  config.desktopSource = desktopOverride || obs.desktopSource || config.desktopSource || DEFAULT_DESKTOP_SOURCE;
+
+  // ── Scenes ──────────────────────────────────────────────────────────────────
+  for (const sceneName of obs.scenes) {
+    registerOnce(new (makeSceneAction(sceneName))());
+    registerOnce(new (makeScenePreviewAction(sceneName))());
+  }
+
+  // ── Source Visibility + Projector ────────────────────────────────────────────
+  for (const sourceName of obs.sources) {
+    for (const action of makeSourceVisibilityActions(sourceName)) {
+      registerOnce(action);
+    }
+    registerOnce(new (makeSourceProjectorAction(sourceName))());
+  }
+
+  // ── Filters ──────────────────────────────────────────────────────────────────
+  for (const { sourceName, filterName } of obs.filters) {
+    registerOnce(new (makeFilterToggleAction(sourceName, filterName))());
+  }
+
+  // ── Transitions ───────────────────────────────────────────────────────────────
+  for (const t of obs.transitions) {
+    registerOnce(new (makeSetTransitionAction(t))());
+  }
+
+  // ── Scene Collections ────────────────────────────────────────────────────────
+  for (const c of obs.sceneCollections) {
+    registerOnce(new (makeSceneCollectionAction(c))());
+  }
+
+  // ── Profiles ──────────────────────────────────────────────────────────────────
+  for (const p of obs.profiles) {
+    registerOnce(new (makeProfileAction(p))());
+  }
+
+  // ── Audio Monitor (all audio inputs) ─────────────────────────────────────────
+  for (const src of [...obs.audioInputs, ...obs.audioOutputs]) {
+    registerOnce(new (makeAudioMonitorAction(src))());
+  }
+
+  // ── Text Sources (presets from config only) ───────────────────────────────────
+  for (const { sourceName, presets } of cfg.textSources) {
+    registerOnce(new (makeTextCycleAction(sourceName, presets))());
+  }
+
+  console.log(`[OBS] Discovered: ${obs.scenes.length} scenes, ${obs.sources.length} sources, ${obs.filters.length} filters, ${obs.transitions.length} transitions`);
+}
+
+// ── Connect to OBS ────────────────────────────────────────────────────────────
+// Discover on every connection — at startup, and whenever OBS is opened later or restarted.
+// Startup waits for whichever discovery finishes first.
+let finishFirstDiscovery = () => {};
+const firstDiscovery = new Promise<void>((resolve) => { finishFirstDiscovery = resolve; });
+obsConnection.onConnected(() => {
+  discoverAndRegister()
+    .catch((e) => console.warn('[OBS] Discovery failed:', (e as Error).message))
+    .finally(() => finishFirstDiscovery());
+});
 
 try {
   // Wait up to 10s for OBS — if it's not open, plugin still works with static actions
@@ -70,65 +146,13 @@ try {
     obsConnection.connect(),
     new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), 10_000)),
   ]);
-
-  const obs = await discoverOBS(obsConnection.obs);
-
-  // Override auto-detected sources with manual config if set
-  const micSource = cfg.micSource || obs.micSource;
-  const desktopSource = cfg.desktopSource || obs.desktopSource;
-
-  // Patch mic/desktop source into the actions that reference config
-  obsConnection.config.micSource = micSource;
-  obsConnection.config.desktopSource = desktopSource;
-
-  // ── Scenes ──────────────────────────────────────────────────────────────────
-  for (const sceneName of obs.scenes) {
-    pluginSDK.registerAction(new (makeSceneAction(sceneName))());
-    pluginSDK.registerAction(new (makeScenePreviewAction(sceneName))());
-  }
-
-  // ── Source Visibility + Projector ────────────────────────────────────────────
-  for (const sourceName of obs.sources) {
-    for (const action of makeSourceVisibilityActions(sourceName)) {
-      pluginSDK.registerAction(action);
-    }
-    pluginSDK.registerAction(new (makeSourceProjectorAction(sourceName))());
-  }
-
-  // ── Filters ──────────────────────────────────────────────────────────────────
-  for (const { sourceName, filterName } of obs.filters) {
-    pluginSDK.registerAction(new (makeFilterToggleAction(sourceName, filterName))());
-  }
-
-  // ── Transitions ───────────────────────────────────────────────────────────────
-  for (const t of obs.transitions) {
-    pluginSDK.registerAction(new (makeSetTransitionAction(t))());
-  }
-
-  // ── Scene Collections ────────────────────────────────────────────────────────
-  for (const c of obs.sceneCollections) {
-    pluginSDK.registerAction(new (makeSceneCollectionAction(c))());
-  }
-
-  // ── Profiles ──────────────────────────────────────────────────────────────────
-  for (const p of obs.profiles) {
-    pluginSDK.registerAction(new (makeProfileAction(p))());
-  }
-
-  // ── Audio Monitor (all audio inputs) ─────────────────────────────────────────
-  for (const src of [...obs.audioInputs, ...obs.audioOutputs]) {
-    pluginSDK.registerAction(new (makeAudioMonitorAction(src))());
-  }
-
-  // ── Text Sources (presets from config only) ───────────────────────────────────
-  for (const { sourceName, presets } of cfg.textSources) {
-    pluginSDK.registerAction(new (makeTextCycleAction(sourceName, presets))());
-  }
-
-  console.log(`[OBS] Discovered: ${obs.scenes.length} scenes, ${obs.sources.length} sources, ${obs.filters.length} filters, ${obs.transitions.length} transitions`);
 } catch {
   console.warn('[OBS] Not reachable at startup — static actions only. Will retry in background.');
   obsConnection.connectWithRetry();
 }
+
+// Register discovered actions before Options+ asks for the action list. Every discovery
+// request has its own timeout, so this finishes even if OBS drops or freezes mid-discovery.
+if (obsConnection.isConnected()) await firstDiscovery;
 
 await pluginSDK.connect();

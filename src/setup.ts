@@ -9,10 +9,7 @@
 import OBSWebSocket from 'obs-websocket-js';
 import { createInterface } from 'readline';
 import { writeFileSync, existsSync, readFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
-
-const CONFIG_PATH = join(homedir(), '.obs-controller-config.json');
+import { CONFIG_PATH, migrateLegacyConfig } from './config-path.js';
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q: string, fallback = ''): Promise<string> =>
@@ -26,6 +23,7 @@ async function main() {
   console.log('Scenes, sources, filters, and transitions are auto-discovered from OBS.');
   console.log('This setup only needs your WebSocket credentials.\n');
 
+  migrateLegacyConfig();
   let existing: Record<string, unknown> = {};
   if (existsSync(CONFIG_PATH)) {
     try { existing = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')); } catch { /* ignore */ }

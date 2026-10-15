@@ -1,8 +1,15 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 
 function notify(title: string, message: string) {
-  const safe = (s: string) => s.replace(/"/g, '\\"');
-  exec(`osascript -e 'display notification "${safe(message)}" with title "${safe(title)}"'`);
+  if (process.platform !== 'darwin') return;
+  // Pass the text as script arguments so quotes in scene or file names can't break the command
+  execFile('osascript', [
+    '-e', 'on run argv',
+    '-e', 'display notification (item 1 of argv) with title (item 2 of argv)',
+    '-e', 'end run',
+    message,
+    title,
+  ], () => { /* ignore */ });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,7 +40,7 @@ export function setupNotifications(obs: any) {
     notify('Studio Controller', `💾 Replay saved: ${file}`);
   });
 
-  obs.on('SceneChanged', (data: unknown) => {
+  obs.on('CurrentProgramSceneChanged', (data: unknown) => {
     const { sceneName } = data as { sceneName: string };
     notify('Studio Controller', `🎬 Scene: ${sceneName}`);
   });
